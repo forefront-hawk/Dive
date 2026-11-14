@@ -1,0 +1,2212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>HawkDive 3D — Real-World Google Maps Skydiving, Wingsuit &amp; Parachute Simulator</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    :root {
+      --hd-bg: #050b14;
+      --hd-panel: rgba(9, 18, 34, 0.90);
+      --hd-border: rgba(148, 163, 184, 0.34);
+      --hd-cyan: #00f5d4;
+      --hd-blue: #38bdf8;
+      --hd-gold: #facc15;
+      --hd-green: #10b981;
+      --hd-red: #ef4444;
+      --hd-orange: #f97316;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      touch-action: none;
+      background: var(--hd-bg);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+      color: #f8fafc;
+    }
+
+    #viewportContainer {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    canvas#dive3dCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Speed Lines / Wind Rush Overlay in First Person */
+    #windRushOverlay {
+      position: fixed;
+      inset: 0;
+      z-index: 3;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 50%, transparent 52%, rgba(224, 242, 254, 0.16) 88%, rgba(255, 255, 255, 0.34) 100%);
+      opacity: 0;
+      transition: opacity 0.2s linear;
+    }
+
+    /* === HUD LAYER === */
+    .hud-shell {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: calc(var(--safe-top) + 8px) calc(var(--safe-right) + 10px) calc(var(--safe-bottom) + 10px) calc(var(--safe-left) + 10px);
+    }
+
+    .hud-top-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .hud-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      pointer-events: auto;
+    }
+
+    .hud-card {
+      background: var(--hd-panel);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--hd-border);
+      border-top: 2px solid var(--hd-cyan);
+      border-radius: 12px;
+      padding: 7px 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+      pointer-events: auto;
+    }
+
+    /* Digital Skydiver Wrist Altimeter Widget */
+    .altimeter-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .alt-big {
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--hd-cyan);
+      line-height: 1;
+      letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .alt-sub {
+      font-size: 10.5px;
+      font-weight: 800;
+      color: #cbd5e1;
+      margin-top: 3px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .phase-light-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      background: rgba(239, 68, 68, 0.22);
+      border: 1.5px solid #ef4444;
+      color: #fecaca;
+    }
+
+    .phase-light-pill.green-light {
+      background: rgba(16, 185, 129, 0.28);
+      border-color: #10b981;
+      color: #a7f3d0;
+      box-shadow: 0 0 18px rgba(16, 185, 129, 0.45);
+    }
+
+    .light-dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+    }
+
+    .phase-light-pill.green-light .light-dot {
+      background: #10b981;
+      box-shadow: 0 0 10px #10b981;
+    }
+
+    .hd-btn {
+      min-height: 42px;
+      padding: 0 12px;
+      border-radius: 10px;
+      border: 1.5px solid var(--hd-border);
+      background: rgba(15, 23, 42, 0.92);
+      color: #f8fafc;
+      font-weight: 800;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: transform 0.1s ease, border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .hd-btn:active {
+      transform: scale(0.95);
+    }
+
+    .hd-btn.active {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      border-color: #7dd3fc;
+      color: #ffffff;
+    }
+
+    .hd-btn.primary-jump {
+      background: linear-gradient(135deg, #10b981, #059669);
+      border-color: #a7f3d0;
+      color: #04121c;
+      font-weight: 900;
+      font-size: 13.5px;
+      box-shadow: 0 0 22px rgba(16, 185, 129, 0.5);
+    }
+
+    .hd-btn.deploy-chute {
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      border-color: #fed7aa;
+      color: #ffffff;
+      font-weight: 900;
+      font-size: 13.5px;
+      box-shadow: 0 0 22px rgba(249, 115, 22, 0.55);
+    }
+
+    .hd-btn.gold {
+      background: linear-gradient(135deg, #facc15, #eab308);
+      border-color: #fef08a;
+      color: #050b14;
+      font-weight: 900;
+    }
+
+    /* Center Action Prompt Banner (Door Open / Pull Warning / Landing Score) */
+    .center-prompt-row {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .big-action-banner {
+      pointer-events: auto;
+      background: rgba(9, 18, 34, 0.92);
+      border: 2px solid var(--hd-cyan);
+      border-radius: 16px;
+      padding: 10px 20px;
+      text-align: center;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.65);
+      max-width: 92vw;
+    }
+
+    /* === TOUCH-NATIVE FLIGHT & PARACHUTE CONTROLS === */
+    .touch-controls-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    /* Left Virtual Stick: Body Pitch (Dive/Track) & Roll/Turn */
+    .virtual-stick-zone {
+      pointer-events: auto;
+      width: 146px;
+      height: 146px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.18) 0%, rgba(9, 18, 34, 0.88) 75%);
+      border: 2px dashed rgba(56, 189, 248, 0.65);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+    }
+
+    .stick-axis-labels {
+      position: absolute;
+      inset: 6px;
+      pointer-events: none;
+      font-size: 9px;
+      font-weight: 900;
+      color: rgba(186, 230, 253, 0.75);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .virtual-stick-nub {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 35%, #ffffff, #38bdf8 70%, #0284c7 100%);
+      border: 2.5px solid #ffffff;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      transition: transform 0.04s linear;
+    }
+
+    /* Center Telemetry Mini-Map & DZ Target Distance */
+    .dz-compass-card {
+      pointer-events: auto;
+      background: var(--hd-panel);
+      border: 1.5px solid var(--hd-border);
+      border-radius: 16px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 175px;
+    }
+
+    /* Right Dock: Parachute Left/Right Riser Toggles & Primary Jump/Chute/Wingsuit Buttons */
+    .right-control-dock {
+      pointer-events: auto;
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .riser-toggles-box {
+      background: var(--hd-panel);
+      border: 1.5px solid var(--hd-border);
+      border-radius: 16px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .riser-pair {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .riser-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      font-size: 9.5px;
+      font-weight: 900;
+      color: #fde047;
+    }
+
+    input[type="range"].vertical-riser {
+      writing-mode: bt-lr;
+      -webkit-appearance: slider-vertical;
+      width: 26px;
+      height: 92px;
+      accent-color: #f97316;
+      cursor: pointer;
+    }
+
+    .action-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* === DROP ZONE & AIRPORT PLANNER MODAL === */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(3, 8, 18, 0.84);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: calc(var(--safe-top) + 10px) 12px calc(var(--safe-bottom) + 10px) 12px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-panel {
+      width: 100%;
+      max-width: 780px;
+      max-height: 92vh;
+      overflow-y: auto;
+      background: linear-gradient(180deg, #0c192e 0%, #050b14 100%);
+      border: 1.5px solid rgba(56, 189, 248, 0.45);
+      border-top: 3px solid var(--hd-cyan);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.85);
+      touch-action: pan-y;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.14);
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 900;
+      color: var(--hd-cyan);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dz-map-box {
+      position: relative;
+      width: 100%;
+      height: 265px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 2px solid #38bdf8;
+      background: #06121e;
+      margin-bottom: 12px;
+    }
+
+    canvas#dzPlannerMapCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    .dz-preset-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .dz-pill-btn {
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: #e2e8f0;
+      padding: 6px 11px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .dz-pill-btn.active {
+      background: #0284c7;
+      border-color: #7dd3fc;
+      color: #ffffff;
+    }
+
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .config-box {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+
+    .config-label {
+      font-size: 11px;
+      font-weight: 900;
+      color: #38bdf8;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+      display: block;
+    }
+
+    .hd-select, .hd-input {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      color: #ffffff;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+
+    .toast-banner {
+      position: fixed;
+      top: calc(var(--safe-top) + 74px);
+      left: 50%;
+      transform: translateX(-50%) scale(0.92);
+      z-index: 60;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      border: 2px solid var(--hd-cyan);
+      color: #ffffff;
+      padding: 10px 20px;
+      border-radius: 999px;
+      font-size: 13.5px;
+      font-weight: 900;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.7);
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.22s ease;
+      text-align: center;
+      max-width: 92vw;
+    }
+
+    .toast-banner.show {
+      opacity: 1;
+      transform: translateX(-50%) scale(1);
+    }
+
+    @media (max-width: 640px) {
+      .virtual-stick-zone { width: 122px; height: 122px; }
+      .dz-compass-card { min-width: 132px; padding: 6px 8px; }
+      .alt-big { font-size: 18px; }
+      input[type="range"].vertical-riser { height: 74px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 3D WebGL Skydiving Viewport -->
+  <div id="viewportContainer">
+    <canvas id="dive3dCanvas"></canvas>
+  </div>
+
+  <!-- Wind Rush Speed Vignette -->
+  <div id="windRushOverlay"></div>
+
+  <!-- Notification Toast -->
+  <div id="hdToastBanner" class="toast-banner">WELCOME TO HAWKDIVE 3D</div>
+
+  <!-- === MAIN HUD LAYER === -->
+  <div class="hud-shell">
+    <!-- Top Telemetry & Action Bar -->
+    <div class="hud-top-row">
+      <div class="hud-group">
+        <div class="hud-card altimeter-card">
+          <div>
+            <div class="alt-big" id="hudAltFeet">0 FT AGL</div>
+            <div class="alt-sub" id="hudSpeedReadout">V-SPD: 0 MPH • H-SPD: 0 MPH</div>
+          </div>
+          <div style="border-left:1px solid rgba(255,255,255,0.2); padding-left:10px;">
+            <div style="font-size:11px; font-weight:900; color:#facc15;" id="hudPhaseLabel">🛫 PHASE 1: RUNWAY ROLL</div>
+            <div style="font-size:10px; color:#94a3b8; font-weight:700;" id="hudTimeSimLabel">⏱️ 20× CLIMB SPEED</div>
+          </div>
+        </div>
+
+        <div class="phase-light-pill" id="hudJumpLightPill">
+          <div class="light-dot"></div>
+          <span id="hudJumpLightText">RED LIGHT — CLIMBING TO DROP POINT (20×)</span>
+        </div>
+      </div>
+
+      <div class="hud-group">
+        <button class="hd-btn gold" id="btnOpenDzPlanner" title="Select Airport, Drop Point &amp; Aircraft on Google Maps">🗺️ Drop Zone &amp; Aircraft</button>
+        <button class="hd-btn active" id="btnCameraToggle" title="Switch First-Person Helmet View / Third-Person Skydiver Chase View [V]">👁️ View: 1st Person [V]</button>
+        <button class="hd-btn" id="btnWingsuitToggle" title="Equip / Stow Wingsuit for High-Glide Flight [W]">🦇 Wingsuit: OFF [W]</button>
+        <button class="hd-btn" id="btnTimeScaleToggle" title="Toggle 1× Actual Freefall Time vs 4× Fast-Forward">⏱️ Time: 1× Real</button>
+        <button class="hd-btn" id="btnSoundMute" title="Mute / Unmute Wind &amp; Aircraft Audio">🔊 Audio</button>
+        <button class="hd-btn" id="btnQuickRestartJump" title="Restart Takeoff or Jump Instant at Drop Point">🔄 Restart</button>
+      </div>
+    </div>
+
+    <!-- Center Prompt Banner (Door Open / Jump / Pull Parachute / Landing Result) -->
+    <div class="center-prompt-row">
+      <div class="big-action-banner" id="centerStatusBanner">
+        <div style="font-size:14px; font-weight:900; color:#00f5d4;" id="centerBannerTitle">✈️ TAKING OFF FROM AIRPORT TO DROP POINT (20× SPEED)</div>
+        <div style="font-size:11.5px; color:#e2e8f0; margin-top:3px;" id="centerBannerSub">Watch the Google Maps ground zoom out as you climb to 14,000 FT. Door opens automatically at the Drop Point!</div>
+      </div>
+    </div>
+
+    <!-- Bottom Touch-Native Controls: Virtual Body/Canopy Stick + DZ Target Radar + Parachute Risers & Jump/Deploy Buttons -->
+    <div class="touch-controls-row">
+      <!-- Left Touch Virtual Joystick -->
+      <div class="virtual-stick-zone" id="touchStickZone" title="Drag to Pitch (Dive / Track) &amp; Bank Left/Right">
+        <div class="stick-axis-labels">
+          <span>▲ DIVE / FWD</span>
+          <div style="display:flex; justify-content:space-between; width:100%; padding:0 4px;">
+            <span>◀ LEFT</span>
+            <span>RIGHT ▶</span>
+          </div>
+          <span>▼ FLARE / ARCH</span>
+        </div>
+        <div class="virtual-stick-nub" id="touchStickNub">🪂</div>
+      </div>
+
+      <!-- Center Drop Point Target & Google Maps Zoom Telemetry -->
+      <div class="dz-compass-card">
+        <div style="font-size:10.5px; font-weight:900; color:#38bdf8;" id="hudDzNameLabel">🎯 DZ: SOUTH RIVER / JB MDL</div>
+        <div style="font-size:13px; font-weight:900; color:#facc15;" id="hudDzDistLabel">DIST TO DZ: 1.42 KM</div>
+        <div style="font-size:10px; color:#94a3b8; font-weight:700;" id="hudMapZoomBadge">🛰️ Google Maps Ground: Zoom 16</div>
+        <div style="display:flex; gap:5px; margin-top:3px;">
+          <button class="hd-btn" id="btnSkipToDoorOpen" style="min-height:28px; padding:0 8px; font-size:10.5px;">⏭️ Skip to Door Open</button>
+          <button class="hd-btn" id="btnUseCurrentGpsHud" style="min-height:28px; padding:0 8px; font-size:10.5px;">📍 My GPS</button>
+        </div>
+      </div>
+
+      <!-- Right Parachute Brake Risers & Jump / Pull Actions -->
+      <div class="right-control-dock">
+        <div class="riser-toggles-box" title="Parachute Left &amp; Right Steering Toggle Risers (Pull Both Down to Flare on Landing!)">
+          <div style="font-size:10px; font-weight:900; color:#cbd5e1;">🪂 CANOPY TOGGLES</div>
+          <div class="riser-pair">
+            <div class="riser-col">
+              <span>L-TURN</span>
+              <input type="range" class="vertical-riser" id="leftRiserSlider" min="0" max="100" value="0" />
+            </div>
+            <div class="riser-col">
+              <span>R-TURN</span>
+              <input type="range" class="vertical-riser" id="rightRiserSlider" min="0" max="100" value="0" />
+            </div>
+          </div>
+          <button class="hd-btn" id="btnHoldDualFlare" style="min-height:30px; width:100%; padding:0 8px; font-size:11px; border-color:#facc15; color:#facc15;">
+            ⏬ FLARE BRAKES
+          </button>
+        </div>
+
+        <div class="action-stack">
+          <button class="hd-btn primary-jump" id="btnMainJumpOrPull">
+            🚪 OPEN DOOR &amp; JUMP [SPACE]
+          </button>
+          <button class="hd-btn deploy-chute" id="btnDeployParachuteNow">
+            🪂 PULL PARACHUTE [P]
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- === MODAL: DROP ZONE, AIRPORT & AIRCRAFT PLANNER ON GOOGLE MAPS === -->
+  <div class="modal-backdrop" id="dzPlannerModal">
+    <div class="modal-panel">
+      <div class="modal-header">
+        <div class="modal-title">🌍 HAWKDIVE — AIRPORT TO DROP POINT PLANNER (GOOGLE MAPS)</div>
+        <button class="hd-btn" id="btnCloseDzPlanner">✕ Resume Flight</button>
+      </div>
+
+      <p style="margin:0 0 10px 0; font-size:12px; color:#cbd5e1; line-height:1.4;">
+        Pick a preset Drop Zone or <strong>click/tap anywhere on the Google Maps satellite view</strong> to move the <strong>🎯 Target Drop Point</strong>. Your plane or helicopter takes off from the airport at <strong>20× speed</strong>, opens the door at the Drop Point, and transitions to <strong>1× actual freefall time</strong> when you jump!
+      </p>
+
+      <!-- Preset Drop Zones -->
+      <div class="dz-preset-row" id="dzPresetsRow">
+        <button class="dz-pill-btn active" data-id="nj_jbmdl">🇺🇸 NJ: JB MDL → South River DZ</button>
+        <button class="dz-pill-btn" data-id="dubai_palm">🇦🇪 Skydive Dubai Palm Jumeirah</button>
+        <button class="dz-pill-btn" data-id="swiss_alps">🇨🇭 Swiss Alps: Interlaken Valley</button>
+        <button class="dz-pill-btn" data-id="hawaii_north">🌺 Hawaii: Oahu North Shore DZ</button>
+        <button class="dz-pill-btn" data-id="utah_moab">🏜️ Utah: Moab Red Cliffs DZ</button>
+        <button class="dz-pill-btn" data-id="nyc_liberty">🗽 NYC: Teterboro → Hudson DZ</button>
+        <button class="dz-pill-btn" id="btnModalCurrentGps" style="border-color:#34d399; color:#34d399;">📍 Jump at My Current GPS</button>
+      </div>
+
+      <!-- Interactive Google Maps Airport -> Drop Point Canvas -->
+      <div class="dz-map-box">
+        <canvas id="dzPlannerMapCanvas" width="720" height="265"></canvas>
+        <div style="position:absolute; top:8px; left:8px; right:8px; display:flex; justify-content:space-between; pointer-events:none;">
+          <div style="background:rgba(5,11,20,0.88); border:1px solid #00f5d4; padding:4px 10px; border-radius:8px; font-size:11px; font-weight:800; color:#a7f3d0;" id="dzMapCoordBadge">
+            🛫 Airport: KWRI (40.0158°, -74.5907°) ➔ 🎯 Drop Point: (40.0320°, -74.5680°)
+          </div>
+          <div style="display:flex; gap:5px; pointer-events:auto;">
+            <button class="hd-btn" id="btnPlannerMapStyle" style="min-height:28px; padding:0 8px; font-size:11px;">Map: Hybrid</button>
+          </div>
+        </div>
+        <div style="position:absolute; bottom:8px; left:8px; right:8px; background:rgba(5,11,20,0.88); padding:4px 10px; border-radius:8px; font-size:11px; color:#fde047; font-weight:800; pointer-events:none;">
+          👆 Tap or click anywhere on the satellite map to place the 🎯 Drop Zone Target Bullseye!
+        </div>
+      </div>
+
+      <!-- Aircraft, Exit Altitude & Suit Configuration -->
+      <div class="config-grid">
+        <div class="config-box">
+          <span class="config-label">1. Jump Aircraft</span>
+          <select id="selJumpAircraft" class="hd-select">
+            <option value="plane" selected>✈️ Twin Otter / C-130 Jump Plane (Side Door)</option>
+            <option value="heli">🚁 UH-60 Black Hawk Helicopter (Open Cabin Door)</option>
+          </select>
+        </div>
+
+        <div class="config-box">
+          <span class="config-label">2. Exit Altitude (AGL)</span>
+          <select id="selExitAltitude" class="hd-select">
+            <option value="14000" selected>14,000 FT (Standard ~60s Freefall)</option>
+            <option value="18000">18,000 FT (Extended Wingsuit Flight)</option>
+            <option value="30000">30,000 FT (HALO Stratosphere Jump ~120s)</option>
+          </select>
+        </div>
+
+        <div class="config-box">
+          <span class="config-label">3. Jump Suit Mode</span>
+          <select id="selSuitMode" class="hd-select">
+            <option value="freefall" selected>🪂 Standard Freefall Suit (120 MPH Terminal)</option>
+            <option value="wingsuit">🦇 Aerodynamic Wingsuit (2.8:1 Forward Glide)</option>
+          </select>
+        </div>
+
+        <div class="config-box">
+          <span class="config-label">4. AAD Safety Reserve</span>
+          <label style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:700; margin-top:6px; cursor:pointer;">
+            <input type="checkbox" id="chkAadAutoDeploy" checked />
+            <span>Auto-Deploy Parachute at 1,000 FT</span>
+          </label>
+        </div>
+      </div>
+
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="hd-btn primary-jump" id="btnStartTakeoffSequence" style="flex:1; min-height:46px;">
+          🛫 START AT AIRPORT RUNWAY (20× TAKEOFF TO DROP POINT)
+        </button>
+        <button class="hd-btn gold" id="btnStartAtDropPointDoor" style="min-height:46px;">
+          🚪 SPAWN AT DROP POINT (DOOR OPEN)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // === SECTION 1: DROP ZONES, GOOGLE MAPS TILE ENGINE & ALTITUDE SCALING ===
+    // =========================================================================
+
+    const FEET_PER_METER = 3.28084;
+    const METERS_PER_FOOT = 0.3048;
+    const MPS_TO_MPH = 2.236936;
+
+    const DROP_ZONES = {
+      nj_jbmdl: {
+        name: 'NJ: JB McGuire-Dix-Lakehurst → South River DZ',
+        airportCode: 'KWRI',
+        airportLat: 40.0158,
+        airportLon: -74.5907,
+        dzLat: 40.0320,
+        dzLon: -74.5680
+      },
+      dubai_palm: {
+        name: 'Skydive Dubai: Palm Jumeirah Drop Zone, UAE',
+        airportCode: 'OMDB',
+        airportLat: 25.0750,
+        airportLon: 55.1320,
+        dzLat: 25.0912,
+        dzLon: 55.1435
+      },
+      swiss_alps: {
+        name: 'Swiss Alps: Interlaken & Eiger Valley DZ',
+        airportCode: 'LSMM',
+        airportLat: 46.6700,
+        airportLon: 7.8350,
+        dzLat: 46.6863,
+        dzLon: 7.8632
+      },
+      hawaii_north: {
+        name: 'Hawaii: Oahu North Shore Dillingham DZ',
+        airportCode: 'PHDH',
+        airportLat: 21.5794,
+        airportLon: -158.1972,
+        dzLat: 21.5835,
+        dzLon: -158.1740
+      },
+      utah_moab: {
+        name: 'Utah: Moab Canyonlands Red Rock DZ',
+        airportCode: 'KCNY',
+        airportLat: 38.7550,
+        airportLon: -109.7548,
+        dzLat: 38.7380,
+        dzLon: -109.7290
+      },
+      nyc_liberty: {
+        name: 'NYC: Teterboro → Hudson & Liberty Landing DZ',
+        airportCode: 'KTEB',
+        airportLat: 40.8501,
+        airportLon: -74.0608,
+        dzLat: 40.7060,
+        dzLon: -74.0410
+      }
+    };
+
+    // Slippy Map Tile Fetcher (Google Maps Hybrid / Satellite / Road / Terrain + Esri fallback)
+    const MapTileEngine = {
+      style: 'google_hybrid', // 'google_hybrid' | 'google_sat' | 'google_terrain' | 'google_roadmap'
+      cache: {},
+
+      lonToTileX(lon, z) {
+        return ((lon + 180) / 360) * Math.pow(2, z);
+      },
+      latToTileY(lat, z) {
+        const rad = THREE.MathUtils.degToRad(Math.max(-85, Math.min(85, lat)));
+        return (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * Math.pow(2, z);
+      },
+      tileXToLon(tx, z) {
+        return (tx / Math.pow(2, z)) * 360 - 180;
+      },
+      tileYToLat(ty, z) {
+        const n = Math.PI - (2 * Math.PI * ty) / Math.pow(2, z);
+        return THREE.MathUtils.radToDeg(Math.atan(0.5 * (Math.exp(n) - Math.exp(-n))));
+      },
+
+      getTileUrl(style, z, x, y) {
+        const maxT = Math.pow(2, z);
+        x = ((x % maxT) + maxT) % maxT;
+        if (y < 0 || y >= maxT) return null;
+        if (style === 'google_roadmap') return `https://mt1.google.com/vt/lyrs=m&x=${x}&y=${y}&z=${z}`;
+        if (style === 'google_sat') return `https://mt1.google.com/vt/lyrs=s&x=${x}&y=${y}&z=${z}`;
+        if (style === 'google_terrain') return `https://mt1.google.com/vt/lyrs=p&x=${x}&y=${y}&z=${z}`;
+        if (style === 'esri_sat') return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`;
+        return `https://mt1.google.com/vt/lyrs=y&x=${x}&y=${y}&z=${z}`;
+      },
+
+      getTile(style, z, x, y, onReadyCallback) {
+        const url = this.getTileUrl(style, z, x, y);
+        if (!url) return null;
+        if (this.cache[url]) return this.cache[url];
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const entry = { img, loaded: false, failed: false };
+        img.onload = () => {
+          entry.loaded = true;
+          if (onReadyCallback) onReadyCallback();
+        };
+        img.onerror = () => {
+          if (style !== 'esri_sat' && !entry.triedFallback) {
+            entry.triedFallback = true;
+            img.src = this.getTileUrl('esri_sat', z, x, y);
+            return;
+          }
+          entry.failed = true;
+        };
+        img.src = url;
+        this.cache[url] = entry;
+        return entry;
+      },
+
+      // Select appropriate Google Maps zoom level based on current Altitude (FT AGL)
+      // Higher altitude -> zoomed-out wide regional satellite view (z=13..14)
+      // Lower altitude -> ultra-sharp street/runway/landing target detail (z=16..18)
+      getZoomForAltitudeFeet(altFeet) {
+        if (altFeet > 20000) return 13;
+        if (altFeet > 11000) return 14;
+        if (altFeet > 4800)  return 15;
+        if (altFeet > 1600)  return 16;
+        if (altFeet > 400)   return 17;
+        return 17;
+      }
+    };
+
+    // =========================================================================
+    // === SECTION 2: WEBAUDIO PROCEDURAL SOUND SYNTHESIZER ===
+    // =========================================================================
+
+    const DiveAudio = {
+      ctx: null,
+      muted: false,
+      windGain: null,
+      windFilter: null,
+
+      init() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            this.ctx = new AudioCtx();
+            this.setupContinuousWindAndEngine();
+          }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+      },
+
+      setupContinuousWindAndEngine() {
+        if (!this.ctx) return;
+        const bufSize = this.ctx.sampleRate * 2;
+        const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+
+        this.windFilter = this.ctx.createBiquadFilter();
+        this.windFilter.type = 'bandpass';
+        this.windFilter.frequency.value = 350;
+
+        this.windGain = this.ctx.createGain();
+        this.windGain.gain.value = 0.0;
+
+        src.connect(this.windFilter).connect(this.windGain).connect(this.ctx.destination);
+        src.start();
+      },
+
+      updateWindIntensity(speedMph, phase) {
+        if (!this.ctx || !this.windGain || this.muted) {
+          if (this.windGain) this.windGain.gain.value = 0;
+          return;
+        }
+        const now = this.ctx.currentTime;
+        if (phase === 'LANDED') {
+          this.windGain.gain.setTargetAtTime(0.0, now, 0.15);
+          return;
+        }
+        const norm = Math.min(1, speedMph / 170);
+        const gainVal = phase === 'CLIMB' ? 0.06 : Math.min(0.28, 0.04 + norm * 0.24);
+        const freqVal = phase === 'CLIMB' ? 180 : 280 + norm * 950;
+        this.windGain.gain.setTargetAtTime(gainVal, now, 0.1);
+        this.windFilter.frequency.setTargetAtTime(freqVal, now, 0.1);
+      },
+
+      playDoorGreenLightBuzzer() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [587.33, 880.0].forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.18);
+          g.gain.setValueAtTime(0.22, now + idx * 0.18);
+          g.gain.exponentialRampToValueAtTime(0.005, now + idx * 0.18 + 0.28);
+          osc.connect(g).connect(this.ctx.destination);
+          osc.start(now + idx * 0.18);
+          osc.stop(now + idx * 0.18 + 0.30);
+        });
+      },
+
+      playCanopyDeploySnap() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(310, now);
+        osc.frequency.exponentialRampToValueAtTime(68, now + 0.38);
+        g.gain.setValueAtTime(0.38, now);
+        g.gain.exponentialRampToValueAtTime(0.005, now + 0.40);
+        osc.connect(g).connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.42);
+      },
+
+      playTouchdownChime() {
+        if (this.muted) return;
+        this.init();
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+          const osc = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + i * 0.09);
+          g.gain.setValueAtTime(0.25, now + i * 0.09);
+          g.gain.exponentialRampToValueAtTime(0.005, now + i * 0.09 + 0.35);
+          osc.connect(g).connect(this.ctx.destination);
+          osc.start(now + i * 0.09);
+          osc.stop(now + i * 0.09 + 0.36);
+        });
+      }
+    };
+
+    // =========================================================================
+    // === SECTION 3: SKYDIVER, AIRCRAFT, WINGSUIT & PARACHUTE STATE ENGINE ===
+    // =========================================================================
+
+    const DIVE = {
+      dzId: 'nj_jbmdl',
+      dzName: DROP_ZONES.nj_jbmdl.name,
+      airportCode: 'KWRI',
+      airportLat: 40.0158,
+      airportLon: -74.5907,
+      dzLat: 40.0320,
+      dzLon: -74.5680,
+
+      aircraftType: 'plane', // 'plane' | 'heli'
+      exitAltFeet: 14000,
+      wingsuitActive: false,
+      aadEnabled: true,
+      cameraMode: 'first_person', // 'first_person' | 'third_person'
+      timeScaleOverride: 1.0,
+
+      // Phases: 'CLIMB' (20x takeoff to drop point) | 'DOOR_OPEN' (ready to jump) | 'FREEFALL' (1x real time) | 'CANOPY' | 'LANDED'
+      phase: 'CLIMB',
+      climbProgress: 0, // 0.0 (Airport Runway) -> 1.0 (Drop Point at Exit Altitude)
+      doorOpenFactor: 0, // 0.0 closed -> 1.0 open
+      exitWalkOffset: 0,
+
+      // World Position in meters relative to Drop Zone Bullseye (0, 0, 0)
+      // Airport starts offset from Drop Point based on real lat/lon delta!
+      airportWorldX: -1800,
+      airportWorldZ: 1450,
+      aircraftPos: new THREE.Vector3(-1800, 0, 1450),
+      aircraftHeading: 0,
+
+      pos: new THREE.Vector3(-1800, 2, 1450),
+      vel: new THREE.Vector3(0, 0, 0),
+      heading: 0,
+      pitch: 0,
+      roll: 0,
+
+      // User Control Inputs (-1..+1)
+      stickX: 0,
+      stickY: 0,
+      leftRiser: 0,  // 0..1
+      rightRiser: 0, // 0..1
+      dualFlare: false,
+      keys: {},
+
+      canopyDeployTimer: 0,
+      freefallElapsedSec: 0,
+      canopyElapsedSec: 0
+    };
+
+    function syncDropZoneWorldOffsets() {
+      const cosLat = Math.cos(THREE.MathUtils.degToRad(DIVE.dzLat));
+      // Airport position relative to Drop Point (0, 0) in meters
+      let dx = (DIVE.airportLon - DIVE.dzLon) * cosLat * 111320;
+      let dz = -(DIVE.airportLat - DIVE.dzLat) * 110540;
+      const dist = Math.hypot(dx, dz);
+      // Clamp airport distance between 1,400m and 4,200m so the 20x takeoff & climb flight is scenic and clear
+      if (dist < 1400 || dist > 4200) {
+        const ang = Math.atan2(dz, dx) || 2.4;
+        const clampedDist = Math.max(1600, Math.min(3400, dist || 2200));
+        dx = Math.cos(ang) * clampedDist;
+        dz = Math.sin(ang) * clampedDist;
+      }
+      DIVE.airportWorldX = dx;
+      DIVE.airportWorldZ = dz;
+      DIVE.aircraftHeading = Math.atan2(-dx, -dz); // Heading from Airport to Drop Point (0, 0)
+    }
+
+    // Start Phase 1: Airport Runway Takeoff & 20x Speed Climb to Drop Point
+    function startTakeoffToDropPointSequence() {
+      syncDropZoneWorldOffsets();
+      DIVE.phase = 'CLIMB';
+      DIVE.climbProgress = 0;
+      DIVE.doorOpenFactor = 0;
+      DIVE.exitWalkOffset = 0;
+      DIVE.freefallElapsedSec = 0;
+      DIVE.canopyElapsedSec = 0;
+      DIVE.leftRiser = 0;
+      DIVE.rightRiser = 0;
+      document.getElementById('leftRiserSlider').value = '0';
+      document.getElementById('rightRiserSlider').value = '0';
+
+      DIVE.aircraftPos.set(DIVE.airportWorldX, 2, DIVE.airportWorldZ);
+      DIVE.pos.copy(DIVE.aircraftPos);
+      DIVE.vel.set(0, 0, 0);
+      DIVE.heading = DIVE.aircraftHeading;
+      DIVE.pitch = 0;
+      DIVE.roll = 0;
+
+      rebuildAircraftMeshForType();
+      updateWingsuitAndCanopyMeshes();
+      updatePhaseUI();
+      showToast(`🛫 Taking off from ${DIVE.airportCode} to Drop Point at 20× Speed!`);
+    }
+
+    // Spawn or Skip Directly to Drop Point with Door Open!
+    function triggerArriveAtDropPointDoorOpen() {
+      syncDropZoneWorldOffsets();
+      DIVE.phase = 'DOOR_OPEN';
+      DIVE.climbProgress = 1.0;
+      const exitMeters = DIVE.exitAltFeet * METERS_PER_FOOT;
+      // Position aircraft slightly upwind of Drop Point (0, 0) so skydiver can fly to the bullseye
+      DIVE.aircraftPos.set(-180, exitMeters, 220);
+      DIVE.pos.copy(DIVE.aircraftPos);
+      DIVE.vel.set(0, 0, 0);
+      DIVE.heading = DIVE.aircraftHeading;
+      DIVE.pitch = 0;
+      DIVE.roll = 0;
+
+      DiveAudio.playDoorGreenLightBuzzer();
+      updateWingsuitAndCanopyMeshes();
+      updatePhaseUI();
+      showToast(`🟢 GREEN LIGHT — DOOR OPEN AT ${DIVE.exitAltFeet.toLocaleString()} FT! Tap JUMP OUT!`);
+    }
+
+    // Leap out of the Plane / Helicopter in First Person!
+    function executeJumpOutFromAircraft() {
+      if (DIVE.phase !== 'DOOR_OPEN' && DIVE.phase !== 'CLIMB') return;
+      if (DIVE.phase === 'CLIMB') {
+        triggerArriveAtDropPointDoorOpen();
+      }
+      DIVE.phase = 'FREEFALL';
+      DIVE.doorOpenFactor = 1.0;
+      DIVE.freefallElapsedSec = 0;
+
+      // Initial forward throw from the moving jump aircraft + step out of side door
+      const fwdSpd = DIVE.aircraftType === 'plane' ? 38 : 14;
+      DIVE.vel.set(
+        Math.sin(DIVE.aircraftHeading) * fwdSpd + Math.cos(DIVE.aircraftHeading) * 4.5,
+        -3.5,
+        -Math.cos(DIVE.aircraftHeading) * fwdSpd + Math.sin(DIVE.aircraftHeading) * 4.5
+      );
+      // Pitch slightly downward as you exit the door looking at the earth below
+      DIVE.pitch = -0.65;
+      DIVE.heading = Math.atan2(-DIVE.pos.x, DIVE.pos.z); // Face toward the Drop Zone bullseye
+
+      updateWingsuitAndCanopyMeshes();
+      updatePhaseUI();
+      showToast(DIVE.wingsuitActive
+        ? '🦇 WINGSUIT EXIT! Use Stick to Pitch & Carve Across Google Maps!'
+        : '🪂 FREEFALL EXIT (1× REAL TIME)! Control Fall with Stick — Pull Parachute above 2,500 FT!');
+    }
+
+    // Deploy 7-Cell Ram-Air Parachute
+    function deployParachuteCanopy(isAutoAad = false) {
+      if (DIVE.phase !== 'FREEFALL') return;
+      DIVE.phase = 'CANOPY';
+      DIVE.canopyDeployTimer = 1.6;
+      DIVE.pitch = 0;
+      DIVE.roll = 0;
+
+      DiveAudio.playCanopyDeploySnap();
+      updateWingsuitAndCanopyMeshes();
+      updatePhaseUI();
+      showToast(isAutoAad
+        ? '🚨 AAD CYPRES AUTO-DEPLOYED PARACHUTE AT 1,000 FT!'
+        : '🪂 PARACHUTE DEPLOYED! Use Left/Right Toggles to Steer & Hold FLARE before Touchdown!');
+    }
+
+    // Step Physics Simulation
+    function stepDivePhysics(dtReal) {
+      // Keyboard input fallback merged with touch stick
+      let inX = DIVE.stickX;
+      let inY = DIVE.stickY;
+      if (DIVE.keys['KeyA'] || DIVE.keys['ArrowLeft'])  inX = -1;
+      if (DIVE.keys['KeyD'] || DIVE.keys['ArrowRight']) inX = 1;
+      if (DIVE.keys['KeyW'] || DIVE.keys['ArrowUp'])    inY = -1; // Dive / Forward
+      if (DIVE.keys['KeyS'] || DIVE.keys['ArrowDown'])  inY = 1;  // Flare / Arch
+
+      if (DIVE.phase === 'CLIMB') {
+        // 20x Speed Takeoff & Climb from Airport Runway to Drop Point!
+        // Real climb to 14,000 ft takes ~4.5 mins (270s); at 20x speed it takes ~13.5 seconds!
+        const climbDurationAt20x = 13.5;
+        DIVE.climbProgress = Math.min(1.0, DIVE.climbProgress + (dtReal / climbDurationAt20x));
+
+        const p = DIVE.climbProgress;
+        const smoothP = p * p * (3 - 2 * p);
+        const exitMeters = DIVE.exitAltFeet * METERS_PER_FOOT;
+
+        // First 15% is runway takeoff roll, then steady climb to (-180, exitMeters, 220)
+        const targetX = -180;
+        const targetZ = 220;
+        DIVE.aircraftPos.x = DIVE.airportWorldX + (targetX - DIVE.airportWorldX) * smoothP;
+        DIVE.aircraftPos.z = DIVE.airportWorldZ + (targetZ - DIVE.airportWorldZ) * smoothP;
+        const altCurve = p < 0.12 ? (p / 0.12) * 0.02 : ((p - 0.12) / 0.88);
+        DIVE.aircraftPos.y = 2 + Math.pow(Math.max(0, altCurve), 0.92) * exitMeters;
+
+        DIVE.pos.copy(DIVE.aircraftPos);
+        DIVE.pitch = p > 0.10 && p < 0.95 ? 0.18 : 0.0;
+
+        const simClimbFpm = 20 * 1150; // 20x simulated climb rate
+        const horizMph = DIVE.aircraftType === 'plane' ? 145 : 110;
+        updateTelemetryUI(simClimbFpm / 60 * METERS_PER_FOOT * MPS_TO_MPH, horizMph);
+        DiveAudio.updateWindIntensity(70, 'CLIMB');
+
+        if (DIVE.climbProgress >= 1.0) {
+          triggerArriveAtDropPointDoorOpen();
+        }
+        return;
+      }
+
+      if (DIVE.phase === 'DOOR_OPEN') {
+        // Animate cabin door sliding/hinging open & skydiver moving to door sill
+        DIVE.doorOpenFactor = Math.min(1.0, DIVE.doorOpenFactor + dtReal * 1.4);
+        DIVE.exitWalkOffset = Math.min(1.0, DIVE.exitWalkOffset + dtReal * 1.1);
+
+        // Aircraft holds steady jump-run orbit over the Drop Point
+        DIVE.pos.set(
+          DIVE.aircraftPos.x + Math.cos(DIVE.aircraftHeading) * (DIVE.exitWalkOffset * 1.35),
+          DIVE.aircraftPos.y - 0.4,
+          DIVE.aircraftPos.z + Math.sin(DIVE.aircraftHeading) * (DIVE.exitWalkOffset * 1.35)
+        );
+        updateTelemetryUI(0, DIVE.aircraftType === 'plane' ? 95 : 45);
+        DiveAudio.updateWindIntensity(85, 'DOOR_OPEN');
+        return;
+      }
+
+      // Apply optional time scale (1.0x actual real-time default)
+      const dt = dtReal * DIVE.timeScaleOverride;
+
+      // Aircraft continues flying away at exit altitude after you jump out!
+      const acSpd = DIVE.aircraftType === 'plane' ? 42 : 24;
+      DIVE.aircraftPos.x += Math.sin(DIVE.aircraftHeading) * acSpd * dt;
+      DIVE.aircraftPos.z -= Math.cos(DIVE.aircraftHeading) * acSpd * dt;
+
+      if (DIVE.phase === 'FREEFALL') {
+        DIVE.freefallElapsedSec += dt;
+
+        // Turn & Pitch control via touch stick / keyboard
+        const turnRate = DIVE.wingsuitActive ? 1.45 : 1.85;
+        DIVE.heading += inX * turnRate * dt;
+        DIVE.roll = THREE.MathUtils.lerp(DIVE.roll, -inX * 0.58, dt * 6);
+
+        // Pitch: inY < 0 = Head-down Dive (-1.15 rad), inY = 0 = Belly Arch (-0.55 rad), inY > 0 = Flare/Track (-0.22 rad)
+        const basePitch = DIVE.wingsuitActive ? -0.36 : -0.58;
+        const targetPitch = basePitch + inY * 0.42;
+        DIVE.pitch = THREE.MathUtils.lerp(DIVE.pitch, targetPitch, dt * 5);
+
+        // Real-time Terminal Velocity & Glide Aerodynamics (m/s)
+        let targetSinkMps, targetGlideMps;
+        if (DIVE.wingsuitActive) {
+          // Wingsuit: ~42-58 MPH vertical sink (19-26 m/s), ~115-145 MPH horizontal glide (51-65 m/s)
+          const diveFactor = -inY; // +1 when diving forward, -1 when flaring
+          targetSinkMps = 22.0 + diveFactor * 8.5;
+          targetGlideMps = 54.0 + diveFactor * 12.0;
+        } else {
+          // Standard Skydiver: 120 MPH belly terminal velocity (53.6 m/s) -> ~60s from 14,000ft to 3,500ft!
+          // Diving head-down reaches ~180 MPH (80 m/s); flaring slows to ~98 MPH (44 m/s)
+          const diveFactor = -inY;
+          targetSinkMps = 53.6 + diveFactor * 22.0;
+          targetGlideMps = 14.0 + Math.max(0, -diveFactor) * 16.0 + Math.max(0, diveFactor) * 8.0;
+        }
+
+        // Smooth gravity & aerodynamic drag convergence to terminal velocity
+        const curSink = -DIVE.vel.y;
+        const nextSink = curSink + (targetSinkMps - curSink) * Math.min(1, dt * 1.65);
+        DIVE.vel.y = -nextSink;
+
+        const targetVx = Math.sin(DIVE.heading) * targetGlideMps;
+        const targetVz = -Math.cos(DIVE.heading) * targetGlideMps;
+        DIVE.vel.x = THREE.MathUtils.lerp(DIVE.vel.x, targetVx, dt * 2.4);
+        DIVE.vel.z = THREE.MathUtils.lerp(DIVE.vel.z, targetVz, dt * 2.4);
+
+        DIVE.pos.addScaledVector(DIVE.vel, dt);
+
+        const altFeet = DIVE.pos.y * FEET_PER_METER;
+        // Check AAD Cypres Auto-Deploy at 1,050 FT
+        if (DIVE.aadEnabled && altFeet <= 1050) {
+          deployParachuteCanopy(true);
+          return;
+        }
+
+        if (DIVE.pos.y <= 1.5) {
+          DIVE.pos.y = 1.5;
+          completeTouchdown(false);
+          return;
+        }
+
+        const vSpdMph = Math.abs(DIVE.vel.y) * MPS_TO_MPH;
+        const hSpdMph = Math.hypot(DIVE.vel.x, DIVE.vel.z) * MPS_TO_MPH;
+        updateTelemetryUI(vSpdMph, hSpdMph);
+        DiveAudio.updateWindIntensity(vSpdMph, 'FREEFALL');
+        return;
+      }
+
+      if (DIVE.phase === 'CANOPY') {
+        DIVE.canopyElapsedSec += dt;
+        if (DIVE.canopyDeployTimer > 0) {
+          DIVE.canopyDeployTimer = Math.max(0, DIVE.canopyDeployTimer - dt);
+        }
+
+        // Combine touch stick and Left/Right Riser sliders
+        const effLeft = Math.max(DIVE.leftRiser, inX < 0 ? -inX : 0, DIVE.dualFlare ? 1 : (inY > 0.2 ? inY : 0));
+        const effRight = Math.max(DIVE.rightRiser, inX > 0 ? inX : 0, DIVE.dualFlare ? 1 : (inY > 0.2 ? inY : 0));
+
+        const turnDiff = effRight - effLeft; // Positive turns right, Negative turns left
+        const brakeAvg = (effLeft + effRight) * 0.5; // 0 = full glide, 1 = deep flare brake
+
+        DIVE.heading += turnDiff * 1.65 * dt;
+        DIVE.roll = THREE.MathUtils.lerp(DIVE.roll, -turnDiff * 0.42, dt * 5);
+        DIVE.pitch = THREE.MathUtils.lerp(DIVE.pitch, brakeAvg * 0.22, dt * 5);
+
+        // Ram-air parachute speeds:
+        // Full glide: ~12 MPH vertical sink (5.4 m/s) + ~24 MPH forward speed (10.8 m/s)
+        // Spiral turn increases dive sink; Dual Flare reduces vertical sink to ~2.2 MPH (1.0 m/s) for soft landing!
+        const spiralDive = Math.abs(turnDiff) * 4.2;
+        const targetSinkMps = Math.max(1.1, 5.4 + spiralDive - brakeAvg * 4.3);
+        const targetFwdMps = Math.max(2.5, 11.2 - brakeAvg * 7.5);
+
+        DIVE.vel.y = THREE.MathUtils.lerp(DIVE.vel.y, -targetSinkMps, dt * 3.2);
+        DIVE.vel.x = THREE.MathUtils.lerp(DIVE.vel.x, Math.sin(DIVE.heading) * targetFwdMps, dt * 3.0);
+        DIVE.vel.z = THREE.MathUtils.lerp(DIVE.vel.z, -Math.cos(DIVE.heading) * targetFwdMps, dt * 3.0);
+
+        DIVE.pos.addScaledVector(DIVE.vel, dt);
+
+        if (DIVE.pos.y <= 1.5) {
+          DIVE.pos.y = 1.5;
+          completeTouchdown(true);
+          return;
+        }
+
+        const vSpdMph = Math.abs(DIVE.vel.y) * MPS_TO_MPH;
+        const hSpdMph = Math.hypot(DIVE.vel.x, DIVE.vel.z) * MPS_TO_MPH;
+        updateTelemetryUI(vSpdMph, hSpdMph);
+        DiveAudio.updateWindIntensity(vSpdMph + hSpdMph, 'CANOPY');
+      }
+    }
+
+    function completeTouchdown(underCanopy) {
+      const impactVSpdMph = Math.round(Math.abs(DIVE.vel.y) * MPS_TO_MPH);
+      DIVE.phase = 'LANDED';
+      DIVE.vel.set(0, 0, 0);
+      DIVE.pitch = 0;
+      DIVE.roll = 0;
+      DiveAudio.updateWindIntensity(0, 'LANDED');
+      DiveAudio.playTouchdownChime();
+
+      const distFromBullseyeM = Math.hypot(DIVE.pos.x, DIVE.pos.z);
+      const score = Math.max(100, Math.round(1000 - distFromBullseyeM * 1.5));
+
+      let grade = '🎯 BULLSEYE STAND-UP LANDING!';
+      if (!underCanopy) {
+        grade = '💥 NO-PULL HARD IMPACT! (Enable AAD or Pull Parachute above 2,000 FT)';
+      } else if (impactVSpdMph > 14) {
+        grade = '⚡ FAST TOUCHDOWN — Pull FLARE BRAKES just before landing!';
+      } else if (distFromBullseyeM < 25) {
+        grade = `🏆 PRO BULLSEYE LANDING! (${distFromBullseyeM.toFixed(1)}m from Center • ${score} PTS)`;
+      } else {
+        grade = `✅ SAFE TOUCHDOWN! (${Math.round(distFromBullseyeM)}m from DZ Bullseye • ${score} PTS)`;
+      }
+
+      updatePhaseUI();
+      document.getElementById('centerBannerTitle').textContent = grade;
+      document.getElementById('centerBannerSub').textContent =
+        `Freefall Time: ${DIVE.freefallElapsedSec.toFixed(1)}s • Canopy Flight: ${DIVE.canopyElapsedSec.toFixed(1)}s • Vertical Touchdown: ${impactVSpdMph} MPH`;
+      showToast(grade);
+    }
+
+    // =========================================================================
+    // === SECTION 4: 3D SCENE, JUMP PLANE/HELI, SKYDIVER, WINGSUIT & CANOPY ===
+    // =========================================================================
+
+    let scene, camera, renderer;
+    let groundCanvas, groundCtx, groundTex, groundMesh;
+    let dzTargetGroup, aircraftGroup, aircraftDoorGroup, heliRotorGroup;
+    let skydiverGroup, wingsuitMembraneGroup, parachuteCanopyGroup, fpHandsAndRigGroup;
+    let lastRenderedTileZoom = -1;
+    let lastTileRenderTime = 0;
+
+    function initThreeViewport() {
+      const canvas = document.getElementById('dive3dCanvas');
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1e64b4);
+      scene.fog = new THREE.FogExp2(0x7ec0ee, 0.00008);
+
+      camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.15, 32000);
+
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x334155, 0.95);
+      hemi.position.set(0, 5000, 0);
+      scene.add(hemi);
+
+      const sun = new THREE.DirectionalLight(0xfffbeb, 1.15);
+      sun.position.set(1500, 4500, 1200);
+      scene.add(sun);
+
+      // Sky Dome
+      const skyGeo = new THREE.SphereGeometry(24000, 24, 16);
+      const count = skyGeo.attributes.position.count;
+      const skyCols = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        const y = skyGeo.attributes.position.getY(i);
+        const t = Math.max(0, Math.min(1, (y + 1000) / 14000));
+        const cTop = new THREE.Color(0x0a2463);
+        const cBot = new THREE.Color(0xbae6fd);
+        const c = cBot.clone().lerp(cTop, Math.pow(t, 0.55));
+        skyCols[i * 3] = c.r;
+        skyCols[i * 3 + 1] = c.g;
+        skyCols[i * 3 + 2] = c.b;
+      }
+      skyGeo.setAttribute('color', new THREE.BufferAttribute(skyCols, 3));
+      scene.add(new THREE.Mesh(skyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+
+      // Multi-Zoom Google Maps Ground Plane
+      groundCanvas = document.createElement('canvas');
+      groundCanvas.width = 1024;
+      groundCanvas.height = 1024;
+      groundCtx = groundCanvas.getContext('2d');
+      groundTex = new THREE.CanvasTexture(groundCanvas);
+      groundTex.anisotropy = 4;
+
+      const groundGeo = new THREE.PlaneGeometry(16000, 16000);
+      groundGeo.rotateX(-Math.PI / 2);
+      groundMesh = new THREE.Mesh(groundGeo, new THREE.MeshBasicMaterial({ map: groundTex }));
+      scene.add(groundMesh);
+
+      // 3D Drop Zone Bullseye Target & Airport Runway on Ground
+      dzTargetGroup = buildDropZoneAndRunway3D();
+      scene.add(dzTargetGroup);
+
+      // 3D Jump Aircraft (Plane / Helicopter with Animated Openable Door)
+      aircraftGroup = new THREE.Group();
+      scene.add(aircraftGroup);
+      rebuildAircraftMeshForType();
+
+      // 3D Skydiver + Optional Wingsuit + Deployable 7-Cell Parachute + 1st-Person Arms/Wrist Altimeter
+      skydiverGroup = buildSkydiverAndRig3D();
+      scene.add(skydiverGroup);
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    function buildDropZoneAndRunway3D() {
+      const grp = new THREE.Group();
+      // Giant Illuminated Bullseye Landing Rings at (0, 0, 0)
+      const colors = [0xef4444, 0xffffff, 0x38bdf8, 0xfacc15];
+      [48, 34, 20, 8].forEach((rad, i) => {
+        const disc = new THREE.Mesh(
+          new THREE.CircleGeometry(rad, 32),
+          new THREE.MeshBasicMaterial({ color: colors[i], side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+        );
+        disc.rotateX(-Math.PI / 2);
+        disc.position.y = 0.4 + i * 0.15;
+        grp.add(disc);
+      });
+
+      // Vertical DZ Smoke / Wind Cone Beacon Pillar
+      const beaconGeo = new THREE.CylinderGeometry(1.5, 6.0, 140, 12, 1, true);
+      const beaconMat = new THREE.MeshBasicMaterial({ color: 0x00f5d4, transparent: true, opacity: 0.28, side: THREE.DoubleSide });
+      const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+      beacon.position.y = 70;
+      grp.add(beacon);
+
+      return grp;
+    }
+
+    // Build Jump Plane (Twin Otter / C-130) or Jump Helicopter (Black Hawk) with Interior Cabin & Sliding Door
+    function rebuildAircraftMeshForType() {
+      while (aircraftGroup.children.length > 0) {
+        aircraftGroup.remove(aircraftGroup.children[0]);
+      }
+      aircraftDoorGroup = new THREE.Group();
+      heliRotorGroup = null;
+
+      const hullMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.45, roughness: 0.35, side: THREE.DoubleSide });
+      const interiorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8, side: THREE.DoubleSide });
+      const stripeMat = new THREE.MeshBasicMaterial({ color: 0x0284c7, side: THREE.DoubleSide });
+      const glassMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+
+      // Cabin Floor & Jump-Master Bench so 1st-Person Interior View looks authentic
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.18, 11.5), interiorMat);
+      floor.position.set(0, -1.1, 0);
+      aircraftGroup.add(floor);
+
+      const ceiling = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.18, 11.5), hullMat);
+      ceiling.position.set(0, 1.45, 0);
+      aircraftGroup.add(ceiling);
+
+      // Left Cabin Wall (with windows)
+      const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.5, 11.5), hullMat);
+      leftWall.position.set(-1.55, 0.18, 0);
+      aircraftGroup.add(leftWall);
+
+      // Right Cabin Wall (with open Jump Doorway cutout at z = -1.5..+1.5)
+      const rightWallFront = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.5, 4.2), hullMat);
+      rightWallFront.position.set(1.55, 0.18, -3.6);
+      const rightWallRear = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.5, 4.2), hullMat);
+      rightWallRear.position.set(1.55, 0.18, 3.6);
+      aircraftGroup.add(rightWallFront, rightWallRear);
+
+      // Sliding Jump Door on Right Side (slides upward/rearward when DIVE.doorOpenFactor -> 1)
+      const slidingDoor = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.35, 3.2), stripeMat);
+      slidingDoor.position.set(1.58, 0.15, 0);
+      aircraftDoorGroup.add(slidingDoor);
+      aircraftGroup.add(aircraftDoorGroup);
+
+      // Nose Cockpit & Windscreen
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(2.2, 4.5, 8), hullMat);
+      nose.rotateX(-Math.PI / 2);
+      nose.rotation.z = Math.PI / 8;
+      nose.position.set(0, 0.1, -7.8);
+      aircraftGroup.add(nose);
+
+      const windshield = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.1, 1.8), glassMat);
+      windshield.position.set(0, 0.65, -5.8);
+      aircraftGroup.add(windshield);
+
+      // Tail Cone & Vertical Fin
+      const tailCone = new THREE.Mesh(new THREE.ConeGeometry(2.1, 7.5, 8), hullMat);
+      tailCone.rotateX(Math.PI / 2);
+      tailCone.position.set(0, 0.3, 9.2);
+      aircraftGroup.add(tailCone);
+
+      const vFin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.2, 3.2), stripeMat);
+      vFin.position.set(0, 2.4, 11.2);
+      aircraftGroup.add(vFin);
+
+      if (DIVE.aircraftType === 'plane') {
+        // High-Wing Twin Otter / Skyvan Jump Plane Wings & Twin Turboprops
+        const highWing = new THREE.Mesh(new THREE.BoxGeometry(21.0, 0.32, 2.8), hullMat);
+        highWing.position.set(0, 1.65, -1.2);
+        aircraftGroup.add(highWing);
+
+        const wingStripe = new THREE.Mesh(new THREE.BoxGeometry(21.2, 0.34, 0.7), stripeMat);
+        wingStripe.position.set(0, 1.65, -1.2);
+        aircraftGroup.add(wingStripe);
+
+        heliRotorGroup = new THREE.Group();
+        [-5.2, 5.2].forEach(px => {
+          const nacelle = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.45, 3.2, 10), stripeMat);
+          nacelle.rotateX(Math.PI / 2);
+          nacelle.position.set(px, 1.4, -2.2);
+          aircraftGroup.add(nacelle);
+        });
+        aircraftGroup.add(heliRotorGroup);
+      } else {
+        // Jump Helicopter: Overhead 4-Blade Main Rotor
+        heliRotorGroup = new THREE.Group();
+        heliRotorGroup.position.set(0, 2.2, -0.5);
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 0.9, 8), stripeMat);
+        mast.position.set(0, 1.8, -0.5);
+        aircraftGroup.add(mast);
+
+        for (let b = 0; b < 4; b++) {
+          const blade = new THREE.Mesh(new THREE.BoxGeometry(16.5, 0.08, 0.55), new THREE.MeshBasicMaterial({ color: 0x0f172a }));
+          blade.rotation.y = (b / 4) * Math.PI;
+          heliRotorGroup.add(blade);
+        }
+        aircraftGroup.add(heliRotorGroup);
+      }
+    }
+
+    function buildSkydiverAndRig3D() {
+      const root = new THREE.Group();
+
+      // 3rd-Person Skydiver Body
+      const bodyGrp = new THREE.Group();
+      root.add(bodyGrp);
+      root.userData.thirdPersonBody = bodyGrp;
+
+      const suitMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.5 });
+      const rigMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.7 });
+      const helmetMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.4, roughness: 0.2 });
+
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.28, 0.85), suitMat);
+      bodyGrp.add(torso);
+
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.22, 0.55), rigMat);
+      pack.position.set(0, 0.22, -0.05);
+      bodyGrp.add(pack);
+
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.20, 14, 12), helmetMat);
+      head.position.set(0, 0.06, -0.58);
+      bodyGrp.add(head);
+
+      // Arms & Legs
+      [-0.42, 0.42].forEach(ax => {
+        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.14, 0.16), suitMat);
+        arm.position.set(ax, 0, -0.25);
+        bodyGrp.add(arm);
+      });
+      [-0.18, 0.18].forEach(lx => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.72), suitMat);
+        leg.position.set(lx, 0, 0.72);
+        bodyGrp.add(leg);
+      });
+
+      // Optional Wingsuit Aerodynamic Membranes (stretched between wrists & ankles)
+      wingsuitMembraneGroup = new THREE.Group();
+      const wingShape = new THREE.Shape();
+      wingShape.moveTo(-0.75, -0.28);
+      wingShape.lineTo(0.75, -0.28);
+      wingShape.lineTo(0.32, 0.95);
+      wingShape.lineTo(-0.32, 0.95);
+      wingShape.closePath();
+      const wingGeo = new THREE.ShapeGeometry(wingShape);
+      wingGeo.rotateX(-Math.PI / 2);
+      const wingMat = new THREE.MeshStandardMaterial({ color: 0xf97316, side: THREE.DoubleSide, roughness: 0.4 });
+      wingsuitMembraneGroup.add(new THREE.Mesh(wingGeo, wingMat));
+      wingsuitMembraneGroup.position.y = -0.02;
+      root.add(wingsuitMembraneGroup);
+
+      // 7-Cell Rectangular Ram-Air Parachute Canopy + Suspension Lines & Risers
+      parachuteCanopyGroup = new THREE.Group();
+      const cellColors = [0xef4444, 0xf97316, 0xfacc15, 0x10b981, 0x00f5d4, 0x38bdf8, 0xa855f7];
+      for (let c = -3; c <= 3; c++) {
+        const cellGeo = new THREE.BoxGeometry(1.15, 0.48, 3.6);
+        const cellMat = new THREE.MeshStandardMaterial({ color: cellColors[c + 3], roughness: 0.5 });
+        const cellMesh = new THREE.Mesh(cellGeo, cellMat);
+        const archY = 6.2 - Math.abs(c) * 0.18;
+        cellMesh.position.set(c * 1.12, archY, 0);
+        cellMesh.rotation.z = -c * 0.06;
+        parachuteCanopyGroup.add(cellMesh);
+      }
+
+      // Parachute Riser & Suspension Lines
+      const lineMat = new THREE.LineBasicMaterial({ color: 0xe2e8f0 });
+      [-3.2, -1.6, 1.6, 3.2].forEach(lx => {
+        const pts = [new THREE.Vector3(lx < 0 ? -0.25 : 0.25, 0.3, 0), new THREE.Vector3(lx, 5.8, -1.2)];
+        const ptsRear = [new THREE.Vector3(lx < 0 ? -0.25 : 0.25, 0.3, 0), new THREE.Vector3(lx, 5.8, 1.2)];
+        parachuteCanopyGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+        parachuteCanopyGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(ptsRear), lineMat));
+      });
+      root.add(parachuteCanopyGroup);
+
+      // First-Person Peripheral Hands, Wrist Altimeter & Toggle Handles
+      fpHandsAndRigGroup = new THREE.Group();
+      const gloveMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.6 });
+      const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.5 });
+      const altMountMat = new THREE.MeshBasicMaterial({ color: 0x00f5d4 });
+
+      const leftArmFp = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.45, 8), sleeveMat);
+      leftArmFp.rotation.x = Math.PI / 2.5;
+      leftArmFp.position.set(-0.34, -0.26, -0.45);
+      const leftGlove = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), gloveMat);
+      leftGlove.position.set(-0.34, -0.18, -0.62);
+      const wristAlti = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.08), altMountMat);
+      wristAlti.position.set(-0.34, -0.19, -0.54);
+
+      const rightArmFp = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.45, 8), sleeveMat);
+      rightArmFp.rotation.x = Math.PI / 2.5;
+      rightArmFp.position.set(0.34, -0.26, -0.45);
+      const rightGlove = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), gloveMat);
+      rightGlove.position.set(0.34, -0.18, -0.62);
+
+      fpHandsAndRigGroup.add(leftArmFp, leftGlove, wristAlti, rightArmFp, rightGlove);
+      camera.add(fpHandsAndRigGroup);
+      scene.add(camera);
+
+      return root;
+    }
+
+    function updateWingsuitAndCanopyMeshes() {
+      if (!wingsuitMembraneGroup || !parachuteCanopyGroup || !skydiverGroup) return;
+      wingsuitMembraneGroup.visible = DIVE.wingsuitActive && (DIVE.phase === 'FREEFALL' || DIVE.phase === 'DOOR_OPEN');
+      parachuteCanopyGroup.visible = (DIVE.phase === 'CANOPY' || DIVE.phase === 'LANDED');
+      skydiverGroup.userData.thirdPersonBody.visible = (DIVE.cameraMode === 'third_person');
+      if (fpHandsAndRigGroup) {
+        fpHandsAndRigGroup.visible = (DIVE.cameraMode === 'first_person' && (DIVE.phase === 'FREEFALL' || DIVE.phase === 'CANOPY'));
+      }
+    }
+
+    // Render Google Maps Satellite Ground Canvas Centered on Drop Zone with Dynamic Multi-Zoom
+    function updateGoogleMapsGroundTexture(force = false) {
+      const now = performance.now();
+      const altFeet = Math.max(0, DIVE.pos.y * FEET_PER_METER);
+      const targetZoom = MapTileEngine.getZoomForAltitudeFeet(altFeet);
+
+      if (!force && targetZoom === lastRenderedTileZoom && (now - lastTileRenderTime < 900)) {
+        return;
+      }
+      lastRenderedTileZoom = targetZoom;
+      lastTileRenderTime = now;
+
+      const w = groundCanvas.width;
+      const h = groundCanvas.height;
+      const centerTx = MapTileEngine.lonToTileX(DIVE.dzLon, targetZoom);
+      const centerTy = MapTileEngine.latToTileY(DIVE.dzLat, targetZoom);
+
+      // Fallback satellite terrain gradient
+      const g = groundCtx.createRadialGradient(w / 2, h / 2, 40, w / 2, h / 2, w / 2);
+      g.addColorStop(0, '#1e3f28');
+      g.addColorStop(0.7, '#163020');
+      g.addColorStop(1, '#0c2233');
+      groundCtx.fillStyle = g;
+      groundCtx.fillRect(0, 0, w, h);
+
+      const radiusTiles = 2;
+      const baseTx = Math.floor(centerTx);
+      const baseTy = Math.floor(centerTy);
+
+      for (let dx = -radiusTiles; dx <= radiusTiles; dx++) {
+        for (let dy = -radiusTiles; dy <= radiusTiles; dy++) {
+          const tx = baseTx + dx;
+          const ty = baseTy + dy;
+          const tile = MapTileEngine.getTile(MapTileEngine.style, targetZoom, tx, ty, () => {
+            lastTileRenderTime = 0; // Trigger re-composite as tiles stream in
+          });
+          const px = Math.round(w / 2 + (tx - centerTx) * 256);
+          const py = Math.round(h / 2 + (ty - centerTy) * 256);
+          if (tile && tile.loaded) {
+            try {
+              groundCtx.drawImage(tile.img, px, py, 256, 256);
+            } catch (e) {}
+          }
+        }
+      }
+
+      // Scale physical ground plane so the Google Maps tiles match real-world meter scale at this zoom level!
+      const metersPerPixel = (156543.03392 * Math.cos(THREE.MathUtils.degToRad(DIVE.dzLat))) / Math.pow(2, targetZoom);
+      const planeSpanMeters = metersPerPixel * w;
+      groundMesh.scale.set(planeSpanMeters / 16000, 1, planeSpanMeters / 16000);
+      groundTex.needsUpdate = true;
+
+      const zoomBadge = document.getElementById('hudMapZoomBadge');
+      if (zoomBadge) {
+        zoomBadge.textContent = `🛰️ Google Maps Ground: Zoom ${targetZoom} (${Math.round(metersPerPixel * 10) / 10}m/px)`;
+      }
+    }
+
+    // =========================================================================
+    // === SECTION 5: UI, PLANNER MAP & ANIMATION LOOP ===
+    // =========================================================================
+
+    function updatePhaseUI() {
+      const phaseLbl = document.getElementById('hudPhaseLabel');
+      const timeLbl = document.getElementById('hudTimeSimLabel');
+      const lightPill = document.getElementById('hudJumpLightPill');
+      const lightTxt = document.getElementById('hudJumpLightText');
+      const bannerTitle = document.getElementById('centerBannerTitle');
+      const bannerSub = document.getElementById('centerBannerSub');
+      const mainBtn = document.getElementById('btnMainJumpOrPull');
+
+      if (DIVE.phase === 'CLIMB') {
+        phaseLbl.textContent = `🛫 PHASE 1: TAKEOFF & CLIMB (${DIVE.airportCode})`;
+        timeLbl.textContent = '⏱️ 20× CLIMB SPEED';
+        lightPill.classList.remove('green-light');
+        lightTxt.textContent = 'RED LIGHT — CLIMBING TO DROP POINT (20×)';
+        bannerTitle.textContent = `✈️ CLIMBING FROM ${DIVE.airportCode} TO DROP POINT (20× SPEED)`;
+        bannerSub.textContent = 'Look out the cabin door window as the Google Maps satellite ground zooms out below!';
+        mainBtn.textContent = '🚪 SKIP CLIMB & OPEN DOOR [SPACE]';
+      } else if (DIVE.phase === 'DOOR_OPEN') {
+        phaseLbl.textContent = '🟢 PHASE 2: DOOR OPEN AT DROP POINT';
+        timeLbl.textContent = '⏱️ READY FOR EXIT';
+        lightPill.classList.add('green-light');
+        lightTxt.textContent = 'GREEN LIGHT — DOOR OPEN! JUMP! JUMP!';
+        bannerTitle.textContent = `🟢 GREEN LIGHT! CABIN DOOR IS OPEN AT ${DIVE.exitAltFeet.toLocaleString()} FT!`;
+        bannerSub.textContent = 'Tap "JUMP OUT NOW!" (or press SPACE) to leap from the aircraft in First Person!';
+        mainBtn.textContent = '🪂 JUMP OUT NOW! [SPACE]';
+      } else if (DIVE.phase === 'FREEFALL') {
+        phaseLbl.textContent = DIVE.wingsuitActive ? '🦇 PHASE 3: WINGSUIT FLIGHT' : '🪂 PHASE 3: FREEFALL (1× TIME)';
+        timeLbl.textContent = `⏱️ ${DIVE.timeScaleOverride}× FREEFALL (${DIVE.freefallElapsedSec.toFixed(0)}s)`;
+        lightPill.classList.add('green-light');
+        lightTxt.textContent = DIVE.wingsuitActive ? 'WINGSUIT GLIDE ACTIVE' : 'FREEFALL — ARCH & TRACK TO DZ';
+        bannerTitle.textContent = DIVE.wingsuitActive
+          ? '🦇 WINGSUIT GLIDE — STEER TOWARD THE DROP ZONE BULLSEYE!'
+          : '🪂 FREEFALL IN PROGRESS — STEER WITH TOUCH STICK & PULL PARACHUTE!';
+        bannerSub.textContent = 'Pull Parachute between 4,500 FT and 2,500 FT AGL for a smooth canopy approach.';
+        mainBtn.textContent = '🪂 DEPLOY PARACHUTE [SPACE]';
+      } else if (DIVE.phase === 'CANOPY') {
+        phaseLbl.textContent = '🪂 PHASE 4: PARACHUTE CANOPY';
+        timeLbl.textContent = `⏱️ ${DIVE.timeScaleOverride}× CANOPY FLIGHT`;
+        lightPill.classList.add('green-light');
+        lightTxt.textContent = 'CANOPY OPEN — STEER WITH L/R TOGGLES';
+        bannerTitle.textContent = '🪂 PARACHUTE DEPLOYED — STEER TO BULLSEYE & FLARE ON LANDING!';
+        bannerSub.textContent = 'Use Left/Right Toggle Sliders (or Touch Stick) to bank, and hold FLARE BRAKES below 50 FT!';
+        mainBtn.textContent = '⏬ HOLD FLARE BRAKES [SPACE]';
+      } else if (DIVE.phase === 'LANDED') {
+        phaseLbl.textContent = '🏁 TOUCHDOWN COMPLETE';
+        timeLbl.textContent = '⏱️ JUMP FINISHED';
+        mainBtn.textContent = '🛫 NEW TAKEOFF & JUMP [SPACE]';
+      }
+
+      document.getElementById('hudDzNameLabel').textContent = `🎯 ${DIVE.dzName.split(':')[0]}`;
+    }
+
+    function updateTelemetryUI(vSpdMph, hSpdMph) {
+      const altFeet = Math.max(0, Math.round(DIVE.pos.y * FEET_PER_METER));
+      const altEl = document.getElementById('hudAltFeet');
+      altEl.textContent = `${altFeet.toLocaleString()} FT AGL`;
+      altEl.style.color = (DIVE.phase === 'FREEFALL' && altFeet < 3200) ? '#ef4444' : '#00f5d4';
+
+      document.getElementById('hudSpeedReadout').textContent =
+        `V-SPD: ${Math.round(vSpdMph)} MPH • H-SPD: ${Math.round(hSpdMph)} MPH`;
+
+      const distM = Math.hypot(DIVE.pos.x, DIVE.pos.z);
+      document.getElementById('hudDzDistLabel').textContent =
+        distM >= 1000 ? `DIST TO DZ: ${(distM / 1000).toFixed(2)} KM` : `DIST TO DZ: ${Math.round(distM)} M`;
+
+      if (DIVE.phase === 'FREEFALL') {
+        document.getElementById('hudTimeSimLabel').textContent =
+          `⏱️ ${DIVE.timeScaleOverride}× REAL TIME (${DIVE.freefallElapsedSec.toFixed(1)}s)`;
+      }
+
+      // Wind rush visual intensity
+      const overlay = document.getElementById('windRushOverlay');
+      if (DIVE.phase === 'FREEFALL') {
+        overlay.style.opacity = String(Math.min(0.85, vSpdMph / 180));
+      } else {
+        overlay.style.opacity = '0';
+      }
+    }
+
+    // Render Interactive Google Maps Drop Zone Planner Modal Canvas
+    function renderDzPlannerCanvas() {
+      const cv = document.getElementById('dzPlannerMapCanvas');
+      if (!cv) return;
+      const ctx = cv.getContext('2d');
+      const w = cv.width, h = cv.height;
+      const z = 14;
+
+      const midLat = (DIVE.airportLat + DIVE.dzLat) * 0.5;
+      const midLon = (DIVE.airportLon + DIVE.dzLon) * 0.5;
+      const cTx = MapTileEngine.lonToTileX(midLon, z);
+      const cTy = MapTileEngine.latToTileY(midLat, z);
+
+      ctx.fillStyle = '#0b2239';
+      ctx.fillRect(0, 0, w, h);
+
+      for (let dx = -2; dx <= 2; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const tx = Math.floor(cTx) + dx;
+          const ty = Math.floor(cTy) + dy;
+          const tile = MapTileEngine.getTile(MapTileEngine.style, z, tx, ty, () => renderDzPlannerCanvas());
+          const px = Math.round(w / 2 + (tx - cTx) * 256);
+          const py = Math.round(h / 2 + (ty - cTy) * 256);
+          if (tile && tile.loaded) {
+            try { ctx.drawImage(tile.img, px, py, 256, 256); } catch (e) {}
+          }
+        }
+      }
+
+      const latLonToCanvas = (lat, lon) => ({
+        x: w / 2 + (MapTileEngine.lonToTileX(lon, z) - cTx) * 256,
+        y: h / 2 + (MapTileEngine.latToTileY(lat, z) - cTy) * 256
+      });
+
+      const apPt = latLonToCanvas(DIVE.airportLat, DIVE.airportLon);
+      const dzPt = latLonToCanvas(DIVE.dzLat, DIVE.dzLon);
+
+      // Draw 20x Takeoff & Climb Flight Corridor Line from Airport to Drop Point
+      ctx.strokeStyle = '#00f5d4';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      ctx.moveTo(apPt.x, apPt.y);
+      ctx.lineTo(dzPt.x, dzPt.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Airport Marker
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(apPt.x, apPt.y, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px Inter, sans-serif';
+      ctx.fillText(`🛫 ${DIVE.airportCode} Airport`, apPt.x + 10, apPt.y + 4);
+
+      // Drop Point Target Bullseye Marker
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(dzPt.x, dzPt.y, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.fillStyle = '#fde047';
+      ctx.fillText('🎯 DROP POINT (BULLSEYE)', dzPt.x + 14, dzPt.y + 4);
+
+      document.getElementById('dzMapCoordBadge').textContent =
+        `🛫 Airport: ${DIVE.airportCode} (${DIVE.airportLat.toFixed(4)}°, ${DIVE.airportLon.toFixed(4)}°) ➔ 🎯 Drop Point: (${DIVE.dzLat.toFixed(4)}°, ${DIVE.dzLon.toFixed(4)}°)`;
+    }
+
+    let toastTimer = null;
+    function showToast(msg) {
+      const b = document.getElementById('hdToastBanner');
+      b.textContent = msg;
+      b.classList.add('show');
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => b.classList.remove('show'), 3100);
+    }
+
+    function lockCurrentGpsDropZone() {
+      const applyGps = (lat, lon, label) => {
+        DIVE.dzName = `${label} (${lat.toFixed(3)}°, ${lon.toFixed(3)}°)`;
+        DIVE.airportCode = 'GPS-APT';
+        DIVE.dzLat = lat;
+        DIVE.dzLon = lon;
+        DIVE.airportLat = lat - 0.015;
+        DIVE.airportLon = lon - 0.022;
+        lastRenderedTileZoom = -1;
+        updateGoogleMapsGroundTexture(true);
+        renderDzPlannerCanvas();
+        startTakeoffToDropPointSequence();
+        showToast(`📍 Locked Drop Zone to ${DIVE.dzName}!`);
+      };
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => applyGps(pos.coords.latitude, pos.coords.longitude, 'My Current GPS DZ'),
+          () => applyGps(40.4262, -74.4182, 'South River, NJ GPS DZ'),
+          { timeout: 3200 }
+        );
+      } else {
+        applyGps(40.4262, -74.4182, 'South River, NJ GPS DZ');
+      }
+    }
+
+    function wireControlsAndEvents() {
+      // Touch Virtual Joystick
+      const stickZone = document.getElementById('touchStickZone');
+      const stickNub = document.getElementById('touchStickNub');
+      let stickActive = false;
+      let centerRect = null;
+
+      const updateStick = (clientX, clientY) => {
+        if (!centerRect) return;
+        const cx = centerRect.left + centerRect.width / 2;
+        const cy = centerRect.top + centerRect.height / 2;
+        const maxR = centerRect.width * 0.38;
+        const dx = clientX - cx;
+        const dy = clientY - cy;
+        const dist = Math.min(maxR, Math.hypot(dx, dy));
+        const ang = Math.atan2(dy, dx);
+        const nx = Math.cos(ang) * dist;
+        const ny = Math.sin(ang) * dist;
+        stickNub.style.transform = `translate(${nx}px, ${ny}px)`;
+        DIVE.stickX = nx / maxR;
+        DIVE.stickY = ny / maxR;
+      };
+
+      const resetStick = () => {
+        stickActive = false;
+        stickNub.style.transform = 'translate(0px, 0px)';
+        DIVE.stickX = 0;
+        DIVE.stickY = 0;
+      };
+
+      stickZone.addEventListener('pointerdown', (e) => {
+        DiveAudio.init();
+        stickZone.setPointerCapture(e.pointerId);
+        stickActive = true;
+        centerRect = stickZone.getBoundingClientRect();
+        updateStick(e.clientX, e.clientY);
+      });
+      stickZone.addEventListener('pointermove', (e) => {
+        if (stickActive) updateStick(e.clientX, e.clientY);
+      });
+      stickZone.addEventListener('pointerup', resetStick);
+      stickZone.addEventListener('pointercancel', resetStick);
+
+      // Parachute Left & Right Riser Sliders + Dual Flare Button
+      const lSlider = document.getElementById('leftRiserSlider');
+      const rSlider = document.getElementById('rightRiserSlider');
+      lSlider.addEventListener('input', () => { DIVE.leftRiser = Number(lSlider.value) / 100; });
+      lSlider.addEventListener('change', () => { lSlider.value = '0'; DIVE.leftRiser = 0; });
+      rSlider.addEventListener('input', () => { DIVE.rightRiser = Number(rSlider.value) / 100; });
+      rSlider.addEventListener('change', () => { rSlider.value = '0'; DIVE.rightRiser = 0; });
+
+      const flareBtn = document.getElementById('btnHoldDualFlare');
+      const setFlare = (val) => {
+        DIVE.dualFlare = val;
+        lSlider.value = val ? '100' : '0';
+        rSlider.value = val ? '100' : '0';
+        DIVE.leftRiser = val ? 1 : 0;
+        DIVE.rightRiser = val ? 1 : 0;
+      };
+      flareBtn.addEventListener('pointerdown', () => setFlare(true));
+      flareBtn.addEventListener('pointerup', () => setFlare(false));
+      flareBtn.addEventListener('pointerleave', () => setFlare(false));
+
+      // Main Jump / Deploy Buttons
+      document.getElementById('btnMainJumpOrPull').addEventListener('click', () => {
+        DiveAudio.init();
+        if (DIVE.phase === 'CLIMB') {
+          triggerArriveAtDropPointDoorOpen();
+        } else if (DIVE.phase === 'DOOR_OPEN') {
+          executeJumpOutFromAircraft();
+        } else if (DIVE.phase === 'FREEFALL') {
+          deployParachuteCanopy(false);
+        } else if (DIVE.phase === 'CANOPY') {
+          setFlare(true);
+          setTimeout(() => setFlare(false), 900);
+        } else {
+          startTakeoffToDropPointSequence();
+        }
+      });
+
+      document.getElementById('btnDeployParachuteNow').addEventListener('click', () => {
+        DiveAudio.init();
+        if (DIVE.phase === 'CLIMB' || DIVE.phase === 'DOOR_OPEN') {
+          executeJumpOutFromAircraft();
+        } else if (DIVE.phase === 'FREEFALL') {
+          deployParachuteCanopy(false);
+        } else {
+          showToast('🪂 Parachute is already deployed — use Left/Right Toggles to steer!');
+        }
+      });
+
+      document.getElementById('btnSkipToDoorOpen').addEventListener('click', () => {
+        DiveAudio.init();
+        triggerArriveAtDropPointDoorOpen();
+      });
+
+      document.getElementById('btnUseCurrentGpsHud').addEventListener('click', lockCurrentGpsDropZone);
+      document.getElementById('btnModalCurrentGps').addEventListener('click', () => {
+        document.getElementById('dzPlannerModal').classList.remove('open');
+        lockCurrentGpsDropZone();
+      });
+
+      // Top Bar Toggles
+      document.getElementById('btnCameraToggle').addEventListener('click', (e) => {
+        DIVE.cameraMode = DIVE.cameraMode === 'first_person' ? 'third_person' : 'first_person';
+        e.currentTarget.textContent = DIVE.cameraMode === 'first_person' ? '👁️ View: 1st Person [V]' : '👁️ View: 3rd Person [V]';
+        updateWingsuitAndCanopyMeshes();
+      });
+
+      document.getElementById('btnWingsuitToggle').addEventListener('click', (e) => {
+        DIVE.wingsuitActive = !DIVE.wingsuitActive;
+        e.currentTarget.textContent = DIVE.wingsuitActive ? '🦇 Wingsuit: ON [W]' : '🦇 Wingsuit: OFF [W]';
+        e.currentTarget.classList.toggle('active', DIVE.wingsuitActive);
+        document.getElementById('selSuitMode').value = DIVE.wingsuitActive ? 'wingsuit' : 'freefall';
+        updateWingsuitAndCanopyMeshes();
+        updatePhaseUI();
+        showToast(DIVE.wingsuitActive ? '🦇 Wingsuit Equipped (2.8:1 Forward Glide Ratio)!' : '🪂 Standard Freefall Suit Active');
+      });
+
+      document.getElementById('btnTimeScaleToggle').addEventListener('click', (e) => {
+        DIVE.timeScaleOverride = DIVE.timeScaleOverride === 1.0 ? 4.0 : 1.0;
+        e.currentTarget.textContent = DIVE.timeScaleOverride === 1.0 ? '⏱️ Time: 1× Real' : '⏩ Time: 4× Fast';
+        e.currentTarget.classList.toggle('active', DIVE.timeScaleOverride > 1.0);
+      });
+
+      document.getElementById('btnSoundMute').addEventListener('click', (e) => {
+        DiveAudio.muted = !DiveAudio.muted;
+        e.currentTarget.textContent = DiveAudio.muted ? '🔇 Muted' : '🔊 Audio';
+      });
+
+      document.getElementById('btnQuickRestartJump').addEventListener('click', () => {
+        startTakeoffToDropPointSequence();
+      });
+
+      // Drop Zone Planner Modal
+      document.getElementById('btnOpenDzPlanner').addEventListener('click', () => {
+        document.getElementById('dzPlannerModal').classList.add('open');
+        renderDzPlannerCanvas();
+      });
+      document.getElementById('btnCloseDzPlanner').addEventListener('click', () => {
+        document.getElementById('dzPlannerModal').classList.remove('open');
+      });
+
+      document.querySelectorAll('#dzPresetsRow .dz-pill-btn[data-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#dzPresetsRow .dz-pill-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const id = btn.getAttribute('data-id');
+          const dz = DROP_ZONES[id];
+          if (dz) {
+            DIVE.dzId = id;
+            DIVE.dzName = dz.name;
+            DIVE.airportCode = dz.airportCode;
+            DIVE.airportLat = dz.airportLat;
+            DIVE.airportLon = dz.airportLon;
+            DIVE.dzLat = dz.dzLat;
+            DIVE.dzLon = dz.dzLon;
+            lastRenderedTileZoom = -1;
+            updateGoogleMapsGroundTexture(true);
+            renderDzPlannerCanvas();
+          }
+        });
+      });
+
+      // Click on Planner Map Canvas to move the Drop Point anywhere on the Google Map!
+      const plannerCv = document.getElementById('dzPlannerMapCanvas');
+      plannerCv.addEventListener('pointerdown', (e) => {
+        const rect = plannerCv.getBoundingClientRect();
+        const px = ((e.clientX - rect.left) / rect.width) * plannerCv.width;
+        const py = ((e.clientY - rect.top) / rect.height) * plannerCv.height;
+        const z = 14;
+        const midLat = (DIVE.airportLat + DIVE.dzLat) * 0.5;
+        const midLon = (DIVE.airportLon + DIVE.dzLon) * 0.5;
+        const cTx = MapTileEngine.lonToTileX(midLon, z);
+        const cTy = MapTileEngine.latToTileY(midLat, z);
+        const clickedTx = cTx + (px - plannerCv.width / 2) / 256;
+        const clickedTy = cTy + (py - plannerCv.height / 2) / 256;
+        DIVE.dzLon = MapTileEngine.tileXToLon(clickedTx, z);
+        DIVE.dzLat = MapTileEngine.tileYToLat(clickedTy, z);
+        lastRenderedTileZoom = -1;
+        updateGoogleMapsGroundTexture(true);
+        renderDzPlannerCanvas();
+      });
+
+      document.getElementById('btnPlannerMapStyle').addEventListener('click', (e) => {
+        const styles = ['google_hybrid', 'google_sat', 'google_terrain', 'google_roadmap'];
+        const names = { google_hybrid: 'Hybrid', google_sat: 'Satellite', google_terrain: 'Terrain', google_roadmap: 'Road' };
+        const next = styles[(styles.indexOf(MapTileEngine.style) + 1) % styles.length];
+        MapTileEngine.style = next;
+        e.currentTarget.textContent = `Map: ${names[next]}`;
+        lastRenderedTileZoom = -1;
+        updateGoogleMapsGroundTexture(true);
+        renderDzPlannerCanvas();
+      });
+
+      document.getElementById('selJumpAircraft').addEventListener('change', (e) => {
+        DIVE.aircraftType = e.target.value;
+        rebuildAircraftMeshForType();
+      });
+      document.getElementById('selExitAltitude').addEventListener('change', (e) => {
+        DIVE.exitAltFeet = parseInt(e.target.value, 10) || 14000;
+      });
+      document.getElementById('selSuitMode').addEventListener('change', (e) => {
+        DIVE.wingsuitActive = (e.target.value === 'wingsuit');
+        const wsBtn = document.getElementById('btnWingsuitToggle');
+        wsBtn.textContent = DIVE.wingsuitActive ? '🦇 Wingsuit: ON [W]' : '🦇 Wingsuit: OFF [W]';
+        wsBtn.classList.toggle('active', DIVE.wingsuitActive);
+        updateWingsuitAndCanopyMeshes();
+      });
+      document.getElementById('chkAadAutoDeploy').addEventListener('change', (e) => {
+        DIVE.aadEnabled = e.target.checked;
+      });
+
+      document.getElementById('btnStartTakeoffSequence').addEventListener('click', () => {
+        document.getElementById('dzPlannerModal').classList.remove('open');
+        startTakeoffToDropPointSequence();
+      });
+      document.getElementById('btnStartAtDropPointDoor').addEventListener('click', () => {
+        document.getElementById('dzPlannerModal').classList.remove('open');
+        triggerArriveAtDropPointDoorOpen();
+      });
+
+      // Keyboard Shortcuts
+      window.addEventListener('keydown', (e) => {
+        DIVE.keys[e.code] = true;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          document.getElementById('btnMainJumpOrPull').click();
+        } else if (e.code === 'KeyP') {
+          document.getElementById('btnDeployParachuteNow').click();
+        } else if (e.code === 'KeyW' && e.shiftKey) {
+          document.getElementById('btnWingsuitToggle').click();
+        } else if (e.code === 'KeyV') {
+          document.getElementById('btnCameraToggle').click();
+        }
+      });
+      window.addEventListener('keyup', (e) => {
+        DIVE.keys[e.code] = false;
+      });
+    }
+
+    // Main 60FPS Render & Physics Loop
+    let lastTime = performance.now();
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, (now - lastTime) / 1000);
+      lastTime = now;
+
+      stepDivePhysics(dt);
+      updateGoogleMapsGroundTexture(false);
+
+      // Update 3D Aircraft & Sliding Door
+      aircraftGroup.position.copy(DIVE.aircraftPos);
+      aircraftGroup.rotation.y = -DIVE.aircraftHeading;
+      if (aircraftDoorGroup) {
+        aircraftDoorGroup.position.z = DIVE.doorOpenFactor * 3.1;
+      }
+      if (heliRotorGroup) {
+        heliRotorGroup.rotation.y += dt * 18;
+      }
+
+      // Update 3D Skydiver & Parachute Canopy
+      skydiverGroup.position.copy(DIVE.pos);
+      skydiverGroup.rotation.order = 'YXZ';
+      skydiverGroup.rotation.y = -DIVE.heading;
+      skydiverGroup.rotation.x = DIVE.pitch;
+      skydiverGroup.rotation.z = DIVE.roll;
+
+      if (parachuteCanopyGroup && parachuteCanopyGroup.visible) {
+        const inflateScale = 1.0 - (DIVE.canopyDeployTimer / 1.6) * 0.75;
+        parachuteCanopyGroup.scale.set(inflateScale, inflateScale, inflateScale);
+      }
+
+      // Position First-Person or Third-Person Camera
+      if (DIVE.phase === 'CLIMB' || DIVE.phase === 'DOOR_OPEN') {
+        if (DIVE.cameraMode === 'first_person') {
+          // Inside the aircraft cabin looking out the open right-side jump door toward the Google Maps earth below!
+          camera.position.set(
+            DIVE.pos.x,
+            DIVE.pos.y + 0.45,
+            DIVE.pos.z
+          );
+          const doorLookAngle = DIVE.aircraftHeading + Math.PI * 0.42;
+          const downLook = DIVE.phase === 'DOOR_OPEN' ? -1.15 : -0.45;
+          camera.lookAt(
+            camera.position.x + Math.sin(doorLookAngle) * 20,
+            camera.position.y + downLook * 18,
+            camera.position.z - Math.cos(doorLookAngle) * 20
+          );
+        } else {
+          // 3rd-Person External Chase Camera watching the plane/helicopter climb and open its door
+          camera.position.set(
+            DIVE.aircraftPos.x + Math.cos(DIVE.aircraftHeading) * 18 - Math.sin(DIVE.aircraftHeading) * 14,
+            DIVE.aircraftPos.y + 6.5,
+            DIVE.aircraftPos.z + Math.sin(DIVE.aircraftHeading) * 18 + Math.cos(DIVE.aircraftHeading) * 14
+          );
+          camera.lookAt(DIVE.aircraftPos.x, DIVE.aircraftPos.y - 2, DIVE.aircraftPos.z);
+        }
+      } else {
+        if (DIVE.cameraMode === 'first_person') {
+          // First-Person Helmet Cam looking toward the ground/horizon along pitch & heading
+          camera.position.set(DIVE.pos.x, DIVE.pos.y + 0.25, DIVE.pos.z);
+          const pitchLook = DIVE.phase === 'FREEFALL' ? DIVE.pitch - 0.55 : -0.32;
+          const horizDist = Math.cos(pitchLook) * 50;
+          const vertDist = Math.sin(pitchLook) * 50;
+          camera.lookAt(
+            DIVE.pos.x + Math.sin(DIVE.heading) * horizDist,
+            DIVE.pos.y + vertDist,
+            DIVE.pos.z - Math.cos(DIVE.heading) * horizDist
+          );
+          camera.rotation.z = DIVE.roll * 0.45;
+        } else {
+          // Third-Person Chase Camera above/behind the skydiver or parachute
+          const backDist = DIVE.phase === 'CANOPY' ? 14.5 : 6.8;
+          const upDist = DIVE.phase === 'CANOPY' ? 7.5 : 4.2;
+          camera.position.set(
+            DIVE.pos.x - Math.sin(DIVE.heading) * backDist,
+            DIVE.pos.y + upDist,
+            DIVE.pos.z + Math.cos(DIVE.heading) * backDist
+          );
+          camera.lookAt(DIVE.pos.x, DIVE.pos.y - 3.5, DIVE.pos.z);
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    window.onload = () => {
+      initThreeViewport();
+      wireControlsAndEvents();
+      updateGoogleMapsGroundTexture(true);
+      startTakeoffToDropPointSequence();
+      requestAnimationFrame(animate);
+    };
+  </script>
+</body>
+</html>
